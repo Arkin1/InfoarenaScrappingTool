@@ -69,6 +69,7 @@ class InfoarenaScrapper:
             for href in next_pages_links:
                 if href.getText() == str(next_page):
                     next_page_url = self.MAIN_URL + href['href']
+                    break
             driver.get(next_page_url)
 
         ranking_sorted = sorted(ranking_dict.items(), key=lambda x: x[1], reverse=True)
@@ -82,15 +83,13 @@ class InfoarenaScrapper:
                 of.write("\n")
             of.close()
 
-    def collect_sourcecode_urls(self, input_file, collect_number):
+    def collect_sourcecode_urls(self, input_file):
         problems_id = []
 
         file_in = input_file
-        counter_problems = collect_number
         with open(file_in, 'r') as opened_file:
-            for it in range(0, counter_problems):
-                problems_id.append(opened_file.readline())
-                problems_id[it] = problems_id[it].replace('\n', '')
+            for line in opened_file:
+                problems_id.append(line.strip())
             opened_file.close()
 
         options = webdriver.ChromeOptions()
@@ -166,3 +165,20 @@ class InfoarenaScrapper:
                                 break
                         driver.get(next_page_url)
         os.chdir(main_directory)
+
+    def create_hierarchy(self, root_name, problems_names_file, score):
+        with open(problems_names_file, 'r') as of:
+            for line in of:
+                dir_name = root_name + '/' + str(line.strip()) + '/' + score
+                try:
+                    os.makedirs(dir_name)
+                    print("Directory ", dir_name, " Created ")
+                except FileExistsError:
+                    print("Directory ", dir_name, " already exists")
+
+                if not os.path.exists(dir_name):
+                    os.makedirs(dir_name)
+                    print("Directory", dir_name, "Created")
+                else:
+                    print("Directory", dir_name, "already exists")
+        of.close()
