@@ -9,8 +9,6 @@ class InfoarenaScrapper:
     SOLUTIONS_URL = "https://infoarena.ro/monitor?task="
 
     def get_problems_links(self, threshold, output_file):
-        THRESHOLD = threshold
-
         # setting up the webdriver
         options = webdriver.ChromeOptions()
         options.add_argument('--ignore-certificate-errors')
@@ -27,17 +25,16 @@ class InfoarenaScrapper:
         current_page_soup = bs(driver.page_source, 'lxml')
         next_pages_links = current_page_soup.find_all('a', href=True)
 
-        last_page_no = ""
+        last_page_no = 0
         for href in reversed(next_pages_links):
             if href.getText().isnumeric():
-                last_page_no = href.getText()
+                last_page_no = int(href.getText())
                 break
 
         # iterate through the pages !! here
         # click the button twice to sort the problems
         next_page = 1
-        while next_page <= last_page_no:
-            next_page = next_page + 1
+        while next_page < last_page_no:
             button_sort_table = driver.find_elements_by_class_name("new_feature")
             if button_sort_table[0].is_displayed():
                 driver.execute_script("arguments[0].click()", button_sort_table[0])
@@ -50,29 +47,32 @@ class InfoarenaScrapper:
             for odd_row in odd_rows_content:
                 no_solutions = odd_row.find('td', class_="").getText()
                 href_links = odd_row.select('.task a')
-                if int(no_solutions) >= THRESHOLD:
+                if int(no_solutions) >= threshold:
                     link = href_links[0]['href']
-                    ranking_dict.update({link: int(no_solutions)})
-                else:
-                    break
+                    ranking_dict[link] = no_solutions
             for even_row in even_rows_content:
                 no_solutions = even_row.find('td', class_="").getText()
                 href_links = even_row.select('.task a')
-                if int(no_solutions) >= THRESHOLD:
+                if int(no_solutions) >= threshold:
                     link = href_links[0]['href']
-                    ranking_dict.update({link: int(no_solutions)})
-                else:
-                    break
+                    ranking_dict[link] = no_solutions
             # get the link to the next page
             next_pages_links = current_page_soup.find_all('a', href=True)
             next_page_url = ""
-            for href in next_pages_links:
-                if href.getText() == str(next_page):
-                    next_page_url = self.MAIN_URL + href['href']
-                    break
+            next_page = next_page + 1
+            for href in reversed(next_pages_links):
+                if href.getText().isnumeric():
+                    if int(href.getText()) == next_page:
+                        print(next_page)
+                        next_page_url = self.MAIN_URL + href['href']
+                        print(next_page_url)
+                        break
             driver.get(next_page_url)
+            current_page_soup = bs(driver.page_source, 'lxml')
 
         ranking_sorted = sorted(ranking_dict.items(), key=lambda x: x[1], reverse=True)
+
+        print(len(ranking_dict))
 
         links_splited = []
         for it in ranking_sorted:
@@ -86,8 +86,7 @@ class InfoarenaScrapper:
     def collect_sourcecode_urls(self, input_file):
         problems_id = []
 
-        file_in = input_file
-        with open(file_in, 'r') as opened_file:
+        with open(input_file, 'r') as opened_file:
             for line in opened_file:
                 problems_id.append(line.strip())
             opened_file.close()
@@ -164,6 +163,7 @@ class InfoarenaScrapper:
                                 next_page_url = self.MAIN_URL + href['href']
                                 break
                         driver.get(next_page_url)
+                        print(next_page_url)
         os.chdir(main_directory)
 
     def create_hierarchy(self, root_name, problems_names_file, score):
