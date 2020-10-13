@@ -1,27 +1,35 @@
 from bs4 import BeautifulSoup as bs
 from selenium import webdriver
 import os
-
+import uuid
+import requests
 class InfoarenaScrapper:
 
     MAIN_URL = "https://www.infoarena.ro"
     PROBLEMS_URL = "https://www.infoarena.ro/arhiva"
     SOLUTIONS_URL = "https://infoarena.ro/monitor?task="
 
-    def get_problems_links(self, threshold, output_file):
-        # setting up the webdriver
+    PROBLEMS_FILENAME = "problems.data"
+
+    def setup_chrome_driver(self):
+        main_directory = os.path.dirname(__file__)
+        chrome_driver_location = main_directory + "/chrome_driver/chromedriver.exe"
         options = webdriver.ChromeOptions()
         options.add_argument('--ignore-certificate-errors')
         options.add_argument('--incognito')
         options.add_argument('--headless')
 
-        main_directory = os.path.dirname(__file__)
-        chrome_driver_location = main_directory + "/chrome_driver/chromedriver.exe"
-        # open up the chrome browser in incognito without opening a window
         driver = webdriver.Chrome(executable_path=chrome_driver_location, options=options)
-        driver.get(self.PROBLEMS_URL)
-        ranking_dict = {}
 
+        return driver;
+
+
+    def get_problems_links(self, threshold):
+
+        driver = self.setup_chrome_driver()
+        driver.get(self.PROBLEMS_URL)
+
+        ranking_dict = {}
         current_page_soup = bs(driver.page_source, 'lxml')
         next_pages_links = current_page_soup.find_all('a', href=True)
 
@@ -34,6 +42,7 @@ class InfoarenaScrapper:
         # iterate through the pages !! here
         # click the button twice to sort the problems
         next_page = 1
+        
         while next_page < last_page_no:
             button_sort_table = driver.find_elements_by_class_name("new_feature")
             if button_sort_table[0].is_displayed():
@@ -77,36 +86,26 @@ class InfoarenaScrapper:
         links_splited = []
         for it in ranking_sorted:
             links_splited.append(it[0].split("/"))
-        with open(output_file, 'w') as of:
+        with open(self.PROBLEMS_FILENAME, 'w') as of:
             for it in links_splited:
                 of.write(it[2])
                 of.write("\n")
             of.close()
 
-    def collect_sourcecode_urls(self, input_file):
+    def collect_sourcecode_urls(self):
         problems_id = []
 
-        with open(input_file, 'r') as opened_file:
+        with open(self.PROBLEMS_FILENAME, 'r') as opened_file:
             for line in opened_file:
                 problems_id.append(line.strip())
             opened_file.close()
 
-        options = webdriver.ChromeOptions()
-        options.add_argument('--ignore-certificate-errors')
-        options.add_argument('--incognito')
-        options.add_argument('--headless')
-
-        main_directory = os.path.dirname(__file__)
-        chrome_driver_location = main_directory + "/chrome_driver/chromedriver.exe"
-        # open up the chrome browser in incognito without opening a window
-        driver = webdriver.Chrome(executable_path=chrome_driver_location, options=options)
+        driver = self.setup_chrome_driver()
 
         for problem in problems_id:
-            os.chdir(main_directory + "/input_data")
             source_code_links_file = "code_links_" + problem + ".data"
             if problem:
                 problem_url = self.SOLUTIONS_URL + problem
-
                 driver.get(problem_url)
 
                 current_page_soup = bs(driver.page_source, 'lxml')
@@ -118,54 +117,72 @@ class InfoarenaScrapper:
                         last_page_no = int(href.getText())
                         break
 
-                with open(source_code_links_file, "w") as opened_file:
-                    counter_solutions = 0
-                    next_page_no = 1
-                    while counter_solutions <= 250 and next_page_no <= last_page_no:
-                        current_page_soup = bs(driver.page_source, 'lxml')
-                        odd_rows_content = current_page_soup.find_all('tr', class_="odd")
-                        even_rows_content = current_page_soup.find_all('tr', class_="even")
-                        next_page_no = next_page_no + 1
-                        for odd_row in odd_rows_content:
-                            try:
-                                text_extracted = odd_row.find('span', class_="job-status-done").getText()
-                            except:
-                                break
+                counter_solutions = 0
+                next_page_no = 1
+                while counter_solutions <= 250 and next_page_no <= last_page_no:
+                    current_page_soup = bs(driver.page_source, 'lxml')
+                    odd_rows_content = current_page_soup.find_all('tr', class_="odd")
+                    even_rows_content = current_page_soup.find_all('tr', class_="even")
+                    next_page_no = next_page_no + 1
+                    for odd_row in odd_rows_content:
+                        try:
+                            text_extracted = odd_row.find('span', class_="job-status-done").getText()
+                        except:
+                            break
 
-                            splitted_text = text_extracted.split(' ')
+                        splitted_text = text_extracted.split(' ')
 
-                            if len(splitted_text) == 4:
-                                if int(splitted_text[2]) == 100:
-                                    href_links = odd_row.select('td a', href=True)
+                        if len(splitted_text) == 4:
+                            if int(splitted_text[2]) == 100:
+                                href_links = odd_row.select('td a', href=True)
 
-                                    opened_file.write(href_links[5]['href'] + "\n")
+                                self.extract_problem(problem,100,href_links[5]['href'])
 
-                                    counter_solutions = counter_solutions + 1
+                                counter_solutions = counter_solutions + 1
 
-                        for even_row in even_rows_content:
-                            try:
-                                text_extracted = even_row.find('span', class_="job-status-done").getText()
-                            except:
-                                break
+                    for even_row in even_rows_content:
+                        try:
+                            text_extracted = even_row.find('span', class_="job-status-done").getText()
+                        except:
+                            break
 
-                            splitted_text = text_extracted.split(' ')
-                            if len(splitted_text) == 4:
-                                if int(splitted_text[2]) == 100:
-                                    href_links = even_row.select('td a', href=True)
+                        splitted_text = text_extracted.split(' ')
+                        if len(splitted_text) == 4:
+                            if int(splitted_text[2]) == 100:
+                                href_links = even_row.select('td a', href=True)
 
-                                    opened_file.write(href_links[5]['href'] + "\n")
+                                self.extract_problem(problem,100,href_links[5]['href'])
 
-                                    counter_solutions = counter_solutions + 1
-                        next_pages_links = current_page_soup.find_all('a', href=True)
-                        next_page_url = ""
-                        for href in next_pages_links:
-                            if href.getText() == str(next_page_no):
-                                next_page_url = self.MAIN_URL + href['href']
-                                break
-                        driver.get(next_page_url)
-                        print(next_page_url)
-        os.chdir(main_directory)
+                                counter_solutions = counter_solutions + 1
+                    next_pages_links = current_page_soup.find_all('a', href=True)
+                    next_page_url = ""
+                    for href in next_pages_links:
+                        if href.getText() == str(next_page_no):
+                            next_page_url = self.MAIN_URL + href['href']
+                            break
+                    driver.get(next_page_url)
+                    print(next_page_url)
 
+    def extract_problem(self, problem_name, score, problem_url):
+          problem_path = f'problems/{problem_name}/{score}'
+          os.makedirs(problem_path, exist_ok = True)
+          
+          url = "https://infoarena.ro/job_detail/2658051?action=view-source"
+          request = requests.post(url, data = {"force_view_source" : "Vezi sursa"})
+
+          current_page_soup = bs(str(request.content), 'lxml')
+
+          code =  current_page_soup.find('code')
+
+          with(open(f'{problem_path}/{uuid.uuid1()}.cpp',"w")) as problem_file:
+              code_text = code.get_text()
+              problem_file.write(bytes(code_text, 'utf-8').decode("unicode_escape"))
+
+          
+
+
+
+'''
     def create_hierarchy(self, root_name, problems_names_file, score):
         with open(problems_names_file, 'r') as of:
             for line in of:
@@ -182,3 +199,4 @@ class InfoarenaScrapper:
                 else:
                     print("Directory", dir_name, "already exists")
         of.close()
+'''

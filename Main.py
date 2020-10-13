@@ -6,7 +6,8 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from InfoarenaScrapper import InfoarenaScrapper as isc
+import requests
+from InfoarenaScrapper import InfoarenaScrapper
 """
 MAIN_URL = "https://www.infoarena.ro"
 PROBLEMS_URL = "https://www.infoarena.ro/arhiva"
@@ -63,7 +64,7 @@ for file_name in glob.glob("./input_data/code_links_*.*"):
             break
         break
 
-"""
+
 
 
 def get_problems_links(threshold, output_file):
@@ -144,7 +145,7 @@ def get_problems_links(threshold, output_file):
             of.write("\n")
         of.close()
 
-# isc.get_problems_links(400, "problems.data")
+#get_problems_links(400, "problems.data")
 
 
 def collect_sourcecode_urls(input_file):
@@ -232,5 +233,10 @@ def collect_sourcecode_urls(input_file):
                     print(next_page_url)
     os.chdir(main_directory)
 
-# isc.collect_sourcecode_url("problems.data")
+"""
 
+#collect_sourcecode_urls("problems.data")
+
+isc = InfoarenaScrapper()
+
+isc.collect_sourcecode_urls()
