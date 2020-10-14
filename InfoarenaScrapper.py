@@ -3,6 +3,7 @@ from selenium import webdriver
 import os
 import uuid
 import requests
+
 class InfoarenaScrapper:
 
     MAIN_URL = "https://www.infoarena.ro"
@@ -18,11 +19,11 @@ class InfoarenaScrapper:
         options.add_argument('--ignore-certificate-errors')
         options.add_argument('--incognito')
         options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
 
         driver = webdriver.Chrome(executable_path=chrome_driver_location, options=options)
 
-        return driver;
-
+        return driver
 
     def get_problems_links(self, threshold):
 
@@ -72,9 +73,7 @@ class InfoarenaScrapper:
             for href in reversed(next_pages_links):
                 if href.getText().isnumeric():
                     if int(href.getText()) == next_page:
-                        print(next_page)
                         next_page_url = self.MAIN_URL + href['href']
-                        print(next_page_url)
                         break
             driver.get(next_page_url)
             current_page_soup = bs(driver.page_source, 'lxml')
@@ -103,7 +102,6 @@ class InfoarenaScrapper:
         driver = self.setup_chrome_driver()
 
         for problem in problems_id:
-            source_code_links_file = "code_links_" + problem + ".data"
             if problem:
                 problem_url = self.SOLUTIONS_URL + problem
                 driver.get(problem_url)
@@ -136,7 +134,7 @@ class InfoarenaScrapper:
                             if int(splitted_text[2]) == 100:
                                 href_links = odd_row.select('td a', href=True)
 
-                                self.extract_problem(problem,100,href_links[5]['href'])
+                                self.extract_problem(problem, 100, href_links[5]['href'])
 
                                 counter_solutions = counter_solutions + 1
 
@@ -151,7 +149,7 @@ class InfoarenaScrapper:
                             if int(splitted_text[2]) == 100:
                                 href_links = even_row.select('td a', href=True)
 
-                                self.extract_problem(problem,100,href_links[5]['href'])
+                                self.extract_problem(problem, 100, href_links[5]['href'])
 
                                 counter_solutions = counter_solutions + 1
                     next_pages_links = current_page_soup.find_all('a', href=True)
@@ -161,23 +159,24 @@ class InfoarenaScrapper:
                             next_page_url = self.MAIN_URL + href['href']
                             break
                     driver.get(next_page_url)
-                    print(next_page_url)
 
     def extract_problem(self, problem_name, score, problem_url):
-          problem_path = f'problems/{problem_name}/{score}'
-          os.makedirs(problem_path, exist_ok = True)
-          
-          url = "https://infoarena.ro/job_detail/2658051?action=view-source"
-          request = requests.post(url, data = {"force_view_source" : "Vezi sursa"})
+        interest_tags = ["cpp", "cpp-32", "cpp-64"]
 
-          current_page_soup = bs(str(request.content), 'lxml')
+        problem_path = f'problems/{problem_name}/{score}'
+        os.makedirs(problem_path, exist_ok=True)
 
-          code =  current_page_soup.find('code')
+        url = self.MAIN_URL + problem_url
 
-          with(open(f'{problem_path}/{uuid.uuid1()}.cpp',"w")) as problem_file:
-              code_text = code.get_text()
-              problem_file.write(bytes(code_text, 'utf-8').decode("unicode_escape"))
+        request = requests.post(url, data={"force_view_source": "Vezi sursa"})
+        current_page_soup = bs(str(request.content), 'lxml')
 
+        code = current_page_soup.find('code')
+        compiler = current_page_soup.find('td', class_="compiler-id").getText()
+        if compiler in interest_tags:
+            with(open(f'{problem_path}/{uuid.uuid1()}.cpp', "w", encoding="utf-8")) as problem_file:
+                code_text = code.getText()
+                problem_file.write(code_text.encode().decode("unicode_escape"))
           
 
 
