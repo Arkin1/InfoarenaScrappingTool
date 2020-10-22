@@ -2,3 +2,5 @@
 /chrome_driver/chromedriver.exe
 /.vscode/settings.json
 /__pycache__/InfoarenaScrapper.cpython-37.pyc
+/problems/*
+problems.data

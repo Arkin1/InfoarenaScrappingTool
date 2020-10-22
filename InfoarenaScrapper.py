@@ -3,7 +3,7 @@ from selenium import webdriver
 import os
 import uuid
 import requests
-
+import shutil
 class InfoarenaScrapper:
 
     MAIN_URL = "https://www.infoarena.ro"
@@ -20,13 +20,14 @@ class InfoarenaScrapper:
         options.add_argument('--incognito')
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
+        options.add_argument('log-level=2')
 
         driver = webdriver.Chrome(executable_path=chrome_driver_location, options=options)
 
         return driver
 
     def get_problems_links(self, threshold):
-
+    
         driver = self.setup_chrome_driver()
         driver.get(self.PROBLEMS_URL)
 
@@ -100,84 +101,99 @@ class InfoarenaScrapper:
             opened_file.close()
 
         driver = self.setup_chrome_driver()
-
+        max_tries = 3
         for problem in problems_id:
-            if problem:
-                problem_url = self.SOLUTIONS_URL + problem
-                driver.get(problem_url)
+            for current_try in range(0,max_tries):
+                try:
+                    if problem:
+                        problem_url = self.SOLUTIONS_URL + problem
+                        driver.get(problem_url)
 
-                current_page_soup = bs(driver.page_source, 'lxml')
-                next_pages_links = current_page_soup.find_all('a', href=True)
+                        current_page_soup = bs(driver.page_source, 'lxml')
+                        next_pages_links = current_page_soup.find_all('a', href=True)
 
-                last_page_no = -1
-                for href in reversed(next_pages_links):
-                    if href.getText().isnumeric():
-                        last_page_no = int(href.getText())
-                        break
+                        last_page_no = -1
+                        for href in reversed(next_pages_links):
+                            if href.getText().isnumeric():
+                                last_page_no = int(href.getText())
+                                break
 
-                counter_solutions = 0
-                next_page_no = 1
-                while counter_solutions <= 250 and next_page_no <= last_page_no:
-                    current_page_soup = bs(driver.page_source, 'lxml')
-                    odd_rows_content = current_page_soup.find_all('tr', class_="odd")
-                    even_rows_content = current_page_soup.find_all('tr', class_="even")
-                    next_page_no = next_page_no + 1
-                    for odd_row in odd_rows_content:
-                        try:
-                            text_extracted = odd_row.find('span', class_="job-status-done").getText()
-                        except:
-                            break
+                        counter_solutions = 0
+                        next_page_no = 1
+                        while counter_solutions <= 250 and next_page_no <= last_page_no:
+                            current_page_soup = bs(driver.page_source, 'lxml')
+                            odd_rows_content = current_page_soup.find_all('tr', class_="odd")
+                            even_rows_content = current_page_soup.find_all('tr', class_="even")
+                            next_page_no = next_page_no + 1
+                            for odd_row in odd_rows_content:
+                                try:
+                                    text_extracted = odd_row.find('span', class_="job-status-done").getText()
+                                except:
+                                    break
 
-                        splitted_text = text_extracted.split(' ')
+                                splitted_text = text_extracted.split(' ')
 
-                        if len(splitted_text) == 4:
-                            if int(splitted_text[2]) == 100:
-                                href_links = odd_row.select('td a', href=True)
+                                if len(splitted_text) == 4:
+                                    if int(splitted_text[2]) == 100:
+                                        href_links = odd_row.select('td a', href=True)
 
-                                self.extract_problem(problem, 100, href_links[5]['href'])
+                                        self.extract_problem(problem, 100, href_links[5]['href'])
 
-                                counter_solutions = counter_solutions + 1
+                                        counter_solutions = counter_solutions + 1
 
-                    for even_row in even_rows_content:
-                        try:
-                            text_extracted = even_row.find('span', class_="job-status-done").getText()
-                        except:
-                            break
+                            for even_row in even_rows_content:
+                                try:
+                                    text_extracted = even_row.find('span', class_="job-status-done").getText()
+                                except:
+                                    break
 
-                        splitted_text = text_extracted.split(' ')
-                        if len(splitted_text) == 4:
-                            if int(splitted_text[2]) == 100:
-                                href_links = even_row.select('td a', href=True)
+                                splitted_text = text_extracted.split(' ')
+                                if len(splitted_text) == 4:
+                                    if int(splitted_text[2]) == 100:
+                                        href_links = even_row.select('td a', href=True)
 
-                                self.extract_problem(problem, 100, href_links[5]['href'])
+                                        self.extract_problem(problem, 100, href_links[5]['href'])
 
-                                counter_solutions = counter_solutions + 1
-                    next_pages_links = current_page_soup.find_all('a', href=True)
-                    next_page_url = ""
-                    for href in next_pages_links:
-                        if href.getText() == str(next_page_no):
-                            next_page_url = self.MAIN_URL + href['href']
-                            break
-                    driver.get(next_page_url)
+                                        counter_solutions = counter_solutions + 1
+                            next_pages_links = current_page_soup.find_all('a', href=True)
+                            next_page_url = ""
+                            for href in next_pages_links:
+                                if href.getText() == str(next_page_no):
+                                    next_page_url = self.MAIN_URL + href['href']
+                                    break
+                            driver.get(next_page_url)
+                    break
+                except Exception as e:
+                    print(f"Exception on {problem_name} at #{current_try + 1} try with exception {e}")
+                    if(os.path.exists(f'problems/{problem_name}')):
+                        shutil.rmtree(f'problems/{problem_name}') 
+                   
+
 
     def extract_problem(self, problem_name, score, problem_url):
         interest_tags = ["cpp", "cpp-32", "cpp-64"]
-
         problem_path = f'problems/{problem_name}/{score}'
         os.makedirs(problem_path, exist_ok=True)
-
         url = self.MAIN_URL + problem_url
+        problem_id = f'{uuid.uuid1()}.cpp'
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+        max_tries = 3
+        for current_try in range(0, max_tries):
+            try:
+                request = requests.post(url, data={"force_view_source": "Vezi sursa"}, headers = headers)
+                current_page_soup = bs(str(request.content), 'lxml')
 
-        request = requests.post(url, data={"force_view_source": "Vezi sursa"})
-        current_page_soup = bs(str(request.content), 'lxml')
-
-        code = current_page_soup.find('code')
-        compiler = current_page_soup.find('td', class_="compiler-id").getText()
-        if compiler in interest_tags:
-            with(open(f'{problem_path}/{uuid.uuid1()}.cpp', "w", encoding="utf-8")) as problem_file:
-                code_text = code.getText()
-                problem_file.write(code_text.encode().decode("unicode_escape"))
-          
+                code = current_page_soup.find('code')
+                compiler = current_page_soup.find('td', class_="compiler-id").getText()
+                if compiler in interest_tags:
+                    with(open(f'{problem_path}/{problem_id}', "w", encoding="utf-8")) as problem_file:
+                        code_text = code.getText()
+                        problem_file.write(code_text.encode().decode("unicode_escape"))
+                break
+            except Exception as e:
+                print(f"Exception on solution {problem_url} at #{current_try + 1} try with exception {e}")
+                if(os.path.exists(f'{problem_path}/{problem_id}')):
+                    os.remove(f'{problem_path}/{problem_id}')
 
 
 
