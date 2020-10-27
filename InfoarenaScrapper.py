@@ -4,11 +4,14 @@ import os
 import uuid
 import requests
 import shutil
+
+
 class InfoarenaScrapper:
 
     MAIN_URL = "https://www.infoarena.ro"
     PROBLEMS_URL = "https://www.infoarena.ro/arhiva"
     SOLUTIONS_URL = "https://infoarena.ro/monitor?task="
+    ARHIVA_URL = "https://infoarena.ro/arhiva-educationala"
 
     PROBLEMS_FILENAME = "problems.data"
 
@@ -27,7 +30,7 @@ class InfoarenaScrapper:
         return driver
 
     def get_problems_links(self, threshold):
-    
+
         driver = self.setup_chrome_driver()
         driver.get(self.PROBLEMS_URL)
 
@@ -44,7 +47,7 @@ class InfoarenaScrapper:
         # iterate through the pages !! here
         # click the button twice to sort the problems
         next_page = 1
-        
+
         while next_page < last_page_no:
             button_sort_table = driver.find_elements_by_class_name("new_feature")
             if button_sort_table[0].is_displayed():
@@ -83,19 +86,16 @@ class InfoarenaScrapper:
 
         print(len(ranking_dict))
 
-        links_splited = []
-        for it in ranking_sorted:
-            links_splited.append(it[0].split("/"))
         with open(self.PROBLEMS_FILENAME, 'w') as of:
-            for it in links_splited:
-                of.write(it[2])
+            for it in ranking_sorted:
+                of.write(it[2].split("/")[2])
                 of.write("\n")
             of.close()
 
-    def collect_sourcecode_urls(self):
+    def collect_sourcecode_urls(self, input_file):
         problems_id = []
 
-        with open(self.PROBLEMS_FILENAME, 'r') as opened_file:
+        with open(input_file, 'r') as opened_file:
             for line in opened_file:
                 problems_id.append(line.strip())
             opened_file.close()
@@ -137,7 +137,7 @@ class InfoarenaScrapper:
                                     if int(splitted_text[2]) == 100:
                                         href_links = odd_row.select('td a', href=True)
 
-                                        self.extract_problem(problem, 100, href_links[5]['href'])
+                                        self.extract_problem(self.MAIN_URL, problem, 100, href_links[5]['href'])
 
                                         counter_solutions = counter_solutions + 1
 
@@ -152,7 +152,7 @@ class InfoarenaScrapper:
                                     if int(splitted_text[2]) == 100:
                                         href_links = even_row.select('td a', href=True)
 
-                                        self.extract_problem(problem, 100, href_links[5]['href'])
+                                        self.extract_problem(self.MAIN_URL, problem, 100, href_links[5]['href'])
 
                                         counter_solutions = counter_solutions + 1
                             next_pages_links = current_page_soup.find_all('a', href=True)
@@ -166,15 +166,13 @@ class InfoarenaScrapper:
                 except Exception as e:
                     print(f"Exception on {problem_name} at #{current_try + 1} try with exception {e}")
                     if(os.path.exists(f'problems/{problem_name}')):
-                        shutil.rmtree(f'problems/{problem_name}') 
-                   
+                        shutil.rmtree(f'problems/{problem_name}')
 
-
-    def extract_problem(self, problem_name, score, problem_url):
+    def extract_problem(self, url_body, problem_name, score, problem_url):
         interest_tags = ["cpp", "cpp-32", "cpp-64"]
         problem_path = f'problems/{problem_name}/{score}'
         os.makedirs(problem_path, exist_ok=True)
-        url = self.MAIN_URL + problem_url
+        url = url_body + problem_url
         problem_id = f'{uuid.uuid1()}.cpp'
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
         max_tries = 3
@@ -195,8 +193,48 @@ class InfoarenaScrapper:
                 if(os.path.exists(f'{problem_path}/{problem_id}')):
                     os.remove(f'{problem_path}/{problem_id}')
 
+    def collect_urls_arhiva(self, output_file):
+        driver = self.setup_chrome_driver()
+        driver.get(self.ARHIVA_URL)
 
+        current_page_soup = bs(driver.page_source, 'lxml')
 
+        next_pages_links = current_page_soup.find_all('a', href=True)
+
+        last_page_no = 0
+        for href in reversed(next_pages_links):
+            if href.getText().isnumeric():
+                last_page_no = int(href.getText())
+                break
+        next_page = 1
+        links = []
+        while next_page <= last_page_no:
+            odd_rows_content = current_page_soup.find_all('tr', class_="odd")
+            even_rows_content = current_page_soup.find_all('tr', class_="even")
+
+            for odd_row in odd_rows_content:
+                links.append(odd_row.find('a', class_="")['href'])
+            for even_row in even_rows_content:
+                links.append(even_row.find('a', class_="")['href'])
+
+            next_pages_links = current_page_soup.find_all('a', href=True)
+            next_page_url = ""
+            next_page = next_page + 1
+            for href in reversed(next_pages_links):
+                if href.getText().isnumeric():
+                    if int(href.getText()) == next_page:
+                        next_page_url = self.MAIN_URL + href['href']
+                        break
+            try:
+                driver.get(next_page_url)
+                current_page_soup = bs(driver.page_source, 'lxml')
+            except:
+                break
+        with open(output_file, 'w') as of:
+            for it in links:
+                of.write(it.split("/")[2])
+                of.write("\n")
+            of.close()
 '''
     def create_hierarchy(self, root_name, problems_names_file, score):
         with open(problems_names_file, 'r') as of:
