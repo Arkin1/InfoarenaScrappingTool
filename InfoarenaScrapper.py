@@ -92,7 +92,7 @@ class InfoarenaScrapper:
                 of.write("\n")
             of.close()
 
-    def collect_sourcecode_urls(self, input_file):
+    def collect_sourcecode_urls(self, input_file, dataset_folder):
         problems_id = []
 
         with open(input_file, 'r') as opened_file:
@@ -137,7 +137,7 @@ class InfoarenaScrapper:
                                     if int(splitted_text[2]) == 100:
                                         href_links = odd_row.select('td a', href=True)
 
-                                        self.extract_problem(self.MAIN_URL, problem, 100, href_links[5]['href'])
+                                        self.extract_problem(self.MAIN_URL, problem, 100, href_links[5]['href'], dataset_folder)
 
                                         counter_solutions = counter_solutions + 1
 
@@ -152,7 +152,7 @@ class InfoarenaScrapper:
                                     if int(splitted_text[2]) == 100:
                                         href_links = even_row.select('td a', href=True)
 
-                                        self.extract_problem(self.MAIN_URL, problem, 100, href_links[5]['href'])
+                                        self.extract_problem(self.MAIN_URL, problem, 100, href_links[5]['href'], dataset_folder)
 
                                         counter_solutions = counter_solutions + 1
                             next_pages_links = current_page_soup.find_all('a', href=True)
@@ -165,12 +165,12 @@ class InfoarenaScrapper:
                     break
                 except Exception as e:
                     print(f"Exception on {problem_name} at #{current_try + 1} try with exception {e}")
-                    if(os.path.exists(f'problems/{problem_name}')):
-                        shutil.rmtree(f'problems/{problem_name}')
+                    if(os.path.exists(f'dataset/{dataset_folder}/{problem_name}')):
+                        shutil.rmtree(f'dataset/{dataset_folder}/{problem_name}')
 
-    def extract_problem(self, url_body, problem_name, score, problem_url):
+    def extract_problem(self, url_body, problem_name, score, problem_url, dataset_folder):
         interest_tags = ["cpp", "cpp-32", "cpp-64"]
-        problem_path = f'problems/{problem_name}/{score}'
+        problem_path = f'dataset/{dataset_folder}/{problem_name}/{score}'
         os.makedirs(problem_path, exist_ok=True)
         url = url_body + problem_url
         problem_id = f'{uuid.uuid1()}.cpp'
